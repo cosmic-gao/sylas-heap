@@ -1,0 +1,14 @@
+{
+  "name": "sylas-heap",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "parcel index.html"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "parcel": "^2.16.1",
+    "typescript": "^5.9.3"
+  }
+}
