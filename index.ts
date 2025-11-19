@@ -1,359 +1,127 @@
-// @ts-nocheck
-// SmoothHeap.js  ——  ES Module 版本（高性能工程实现）
+/**
+ * 类型安全的比较器接口。
+ * comparator(a, b) 的返回值应遵循：
+ * - 负数: a 的优先级高于 b (a 应该在堆中更靠近顶部)
+ * - 零: a 和 b 优先级相同
+ * - 正数: b 的优先级高于 a (b 应该在堆中更靠近顶部)
+ * * 对于 Min-Heap (最小堆)，可以实现 (a, b) => a - b。
+ * 对于 Max-Heap (最大堆)，可以实现 (a, b) => b - a。
+ */
+export type Comparator<K> = (a: K, b: K) => number;
 
-class SmoothHeapNode {
-  constructor(key = null, value = null) {
-    this.key = key;
+/**
+ * 配对堆节点结构
+ * PairingNode<T> 内部包含实际存储的数据 T。
+ * 配对堆的节点是一个多叉树结构。
+ */
+export class PairingNode<T> {
+  public value: T;
+
+  public first_child: PairingNode<T> | null = null;
+  public next_sibling: PairingNode<T> | null = null;
+
+  /**
+   * 【前驱连接】实现 O(1) 剪切的核心指针。
+   * - 如果是第一个孩子，指向父节点 (Parent)。
+   * - 否则，指向上一个兄弟节点 (Previous Sibling)。
+   */
+  public prev_link: PairingNode<T> | null = null;
+
+  public constructor(value: T) {
     this.value = value;
-
-    this.parent = null;
-    this.child = null;
-
-    // sibling double linked list
-    this.sibling = null;
-    this.prevSibling = null;
-  }
-
-  detachFromSiblings() {
-    if (this.prevSibling) {
-      this.prevSibling.sibling = this.sibling;
-    }
-    if (this.sibling) {
-      this.sibling.prevSibling = this.prevSibling;
-    }
-    this.sibling = null;
-    this.prevSibling = null;
-  }
-
-  linkChildAsFirst(other) {
-    if (!other) return;
-    other.parent = this;
-    other.prevSibling = null;
-    other.sibling = this.child;
-    if (this.child) this.child.prevSibling = other;
-    this.child = other;
-  }
-
-  clearPointers() {
-    this.parent = null;
-    this.child = null;
-    this.sibling = null;
-    this.prevSibling = null;
-    this.key = null;
-    this.value = null;
   }
 }
 
-class SmoothHeap {
-  constructor(comparator = null, usePool = true) {
-    if (comparator && typeof comparator !== 'function') {
-      throw new TypeError('comparator 必须是函数或 null');
-    }
+export class PairingHeap<T> {
+  readonly #comparator: Comparator<T>;
+  #root: PairingNode<T> | null = null;
 
-    this._cmp = comparator || ((a, b) => {
-      if (a === b) return 0;
-      return a < b ? -1 : 1;
-    });
-
-    this.root = null;
-    this._size = 0;
-
-    this._usePool = Boolean(usePool);
-    this._pool = [];
+  public constructor(comparator: Comparator<T>) {
+    this.#comparator = comparator;
   }
 
-  isEmpty() { return this.root === null; }
-  size() { return this._size; }
-
-  _allocNode(key, value) {
-    let n;
-    if (this._usePool && this._pool.length) {
-      n = this._pool.pop();
-      n.key = key;
-      n.value = value;
-    } else {
-      n = new SmoothHeapNode(key, value);
-    }
-    return n;
+  public peek(): T | undefined {
+    return this.#root?.value;
   }
 
-  _freeNode(node) {
-    if (!node) return;
-    node.clearPointers();
-    if (this._usePool) this._pool.push(node);
-  }
-
-  _less(a, b) {
-    return this._cmp(a, b) < 0;
-  }
-
-  static _meldNodes(a, b, cmp) {
-    if (!a) return b;
-    if (!b) return a;
-
-    if (cmp(a.key, b.key) <= 0) {
-      b.parent = a;
-      b.prevSibling = null;
-      b.sibling = a.child;
-      if (a.child) a.child.prevSibling = b;
-      a.child = b;
-      return a;
-    } else {
-      a.parent = b;
-      a.prevSibling = null;
-      a.sibling = b.child;
-      if (b.child) b.child.prevSibling = a;
-      b.child = a;
-      return b;
-    }
-  }
-
-  insert(key, value = null) {
-    const node = this._allocNode(key, value);
-    node.parent = node.child =
-      node.sibling = node.prevSibling = null;
-
-    this.root = SmoothHeap._meldNodes(this.root, node, this._cmp);
-    this._size++;
+  public insert(value: T): PairingNode<T> {
+    const node = new PairingNode(value);
+    this.#root = this.#root === null
+      ? node
+      : this.#meld(this.#root, node);
     return node;
   }
 
-  findMin() {
-    if (!this.root) return null;
-    return { key: this.root.key, value: this.root.value };
+  public poll() {
+    if (!this.#root) return null;
+
+    const value = this.#root.value
+    if (!this.#root.first_child) {
+      this.#root = null;
+      return value;
+    }
   }
 
-  merge(other) {
-    if (!(other instanceof SmoothHeap)) {
-      throw new TypeError('merge 需要另一个 SmoothHeap');
-    }
-    if (other === this) return;
-
-    this.root = SmoothHeap._meldNodes(this.root, other.root, this._cmp);
-    this._size += other._size;
-
-    other.root = null;
-    other._size = 0;
-    other._pool.length = 0;
-  }
-
-  decreaseKey(node, newKey) {
-    if (!node) throw new TypeError('需要 node');
-    if (this._cmp(newKey, node.key) > 0) {
-      throw new Error('newKey 必须 <= 当前 key');
-    }
-
-    node.key = newKey;
-
-    if (node === this.root) return;
-
-    const p = node.parent;
-    if (p) {
-      if (p.child === node) {
-        p.child = node.sibling;
-        if (node.sibling) node.sibling.prevSibling = null;
-      } else {
-        node.detachFromSiblings();
+  #meld(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
+    if (this.#comparator(a.value, b.value) <= 0) {
+      b.next_sibling = a.first_child;
+      if (a.first_child) {
+        a.first_child.prev_link = b;
       }
-      node.parent = null;
-    } else {
-      node.detachFromSiblings();
+
+      b.prev_link = a;
+      a.first_child = b;
+      return a;
     }
 
-    node.sibling = node.prevSibling = null;
-    this.root = SmoothHeap._meldNodes(this.root, node, this._cmp);
+    a.next_sibling = b.first_child;
+    if (b.first_child) {
+      b.first_child.prev_link = a;
+    }
+
+    a.prev_link = b;
+    b.first_child = a;
+    return b;
   }
 
-  delete(node) {
-    if (!node) return;
-
-    // cut node to root
-    if (node !== this.root) {
-      const p = node.parent;
-      if (p) {
-        if (p.child === node) {
-          p.child = node.sibling;
-          if (node.sibling) node.sibling.prevSibling = null;
-        } else node.detachFromSiblings();
-        node.parent = null;
-      } else node.detachFromSiblings();
-
-      node.sibling = node.prevSibling = null;
-      this.root = SmoothHeap._meldNodes(this.root, node, this._cmp);
+  #merge_pairs(head: PairingNode<T> | null): PairingNode<T> | null {
+    if (head === null || head.next_sibling === null) {
+      return head;
     }
 
-    // try decreaseKey to smallest
-    if (typeof node.key === 'number') {
-      this.decreaseKey(node, Number.NEGATIVE_INFINITY);
-    } else {
-      try {
-        this.decreaseKey(node, this.root.key);
-      } catch (_) {}
-    }
+    let current: PairingNode<T> = head;
+    let next: PairingNode<T> | null;
 
-    return this.deleteMin();
-  }
+    const merged_list: PairingNode<T>[] = [];
 
-  deleteMin() {
-    if (!this.root) return null;
+    while (current !== null) {
+      next = current.next_sibling;
 
-    const oldRoot = this.root;
-    const ret = { key: oldRoot.key, value: oldRoot.value };
+      current.prev_link = current.next_sibling = null;
 
-    const firstChild = oldRoot.child;
-
-    oldRoot.child = oldRoot.parent = null;
-    oldRoot.sibling = oldRoot.prevSibling = null;
-
-    if (!firstChild) {
-      this.root = null;
-      this._size--;
-      this._freeNode(oldRoot);
-      return ret;
-    }
-
-    let iter = firstChild;
-    while (iter) {
-      iter.parent = null;
-      iter = iter.sibling;
-    }
-
-    const stack = [];
-    let cur = firstChild;
-    while (cur) {
-      const a = cur;
-      const b = cur.sibling;
-      if (!b) {
-        a.prevSibling = null;
-        a.sibling = null;
-        stack.push(a);
+      if (next === null) {
+        merged_list.push(current);
         break;
       }
 
-      const next = b.sibling;
+      next.prev_link = next.next_sibling = null;
 
-      a.prevSibling = null;
-      a.sibling = null;
-      b.prevSibling = null;
-      b.sibling = null;
+      current = this.#meld(current, next);
+      merged_list.push(current);
 
-      if (this._cmp(a.key, b.key) <= 0) {
-        b.parent = a;
-        b.prevSibling = null;
-        b.sibling = a.child;
-        if (a.child) a.child.prevSibling = b;
-        a.child = b;
-        stack.push(a);
-      } else {
-        a.parent = b;
-        a.prevSibling = null;
-        a.sibling = b.child;
-        if (b.child) b.child.prevSibling = a;
-        b.child = a;
-        stack.push(b);
-      }
-
-      cur = next;
+      current = next.next_sibling!;
     }
 
-    let newRoot = stack.length ? stack.pop() : null;
-    while (stack.length) {
-      const t = stack.pop();
-      newRoot = SmoothHeap._meldNodes(t, newRoot, this._cmp);
+    if (merged_list.length === 0) {
+      return null;
     }
 
-    this.root = newRoot;
-    if (this.root) this.root.parent = null;
+    let result_root = merged_list[merged_list.length - 1];
 
-    this._size--;
-    this._freeNode(oldRoot);
-
-    return ret;
-  }
-
-  toArray() {
-    const out = [];
-    if (!this.root) return out;
-
-    const stack = [this.root];
-    while (stack.length) {
-      const n = stack.pop();
-      out.push({ key: n.key, value: n.value });
-      let c = n.child;
-      while (c) {
-        stack.push(c);
-        c = c.sibling;
-      }
+    for (let i = merged_list.length - 2; i >= 0; i--) {
+      result_root = this.#meld(result_root, merged_list[i]);
     }
-    return out;
-  }
 
-  debugString() {
-    if (!this.root) return '<empty>';
-    const lines = [];
-    const walk = (node, depth = 0) => {
-      const pad = '  '.repeat(depth);
-      lines.push(`${pad}- (${node.key}) ${String(node.value)}`);
-      let c = node.child;
-      while (c) {
-        walk(c, depth + 1);
-        c = c.sibling;
-      }
-    };
-    walk(this.root, 0);
-    return lines.join('\n');
+    return result_root;
   }
 }
-
-
-const heap = new SmoothHeap();
-
-// 插入一些元素
-const n1 = heap.insert(10, 'task-10');
-const n2 = heap.insert(3,  'task-3');
-const n3 = heap.insert(7,  'task-7');
-const n4 = heap.insert(15, 'task-15');
-const n5 = heap.insert(8,  'task-8');
-
-console.log('当前最小值:', heap.findMin()); 
-// => { key: 3, value: 'task-3' }
-
-// decreaseKey：把 key 7 改成 key 1
-heap.decreaseKey(n3, 1);
-console.log('执行 decreaseKey 后的最小值:', heap.findMin());
-// => { key: 1, value: 'task-7' }
-
-console.log('\n当前堆结构:\n' + heap.debugString());
-
-// 删除最小
-const removedMin = heap.deleteMin();
-console.log('\n删除最小:', removedMin.key, removedMin.value);
-
-console.log('\n现在的堆结构:\n' + heap.debugString());
-
-// 删除任意节点，例如 n1 (key=10)
-console.log('\n删除节点 n1:', heap.delete(n1));
-
-console.log('\n删除 n1 后堆结构:\n' + heap.debugString());
-
-// 演示 merge：创建第二个堆
-const heap2 = new SmoothHeap();
-heap2.insert(2, 'from-heap2');
-heap2.insert(50, 'another');
-
-heap.merge(heap2);
-console.log('\n合并 heap2 后最小值:', heap.findMin());
-console.log('\n合并后堆结构:\n' + heap.debugString());
-
-// 示例：使用自定义比较器（字符串长度排序）
-const heap3 = new SmoothHeap((a, b) => a.length - b.length);
-
-heap3.insert('banana');
-heap3.insert('kiwi');
-heap3.insert('dragonfruit');
-heap3.insert('fig');
-
-console.log('\n字符串长度最小:', heap3.findMin());
-// => 'fig'
-
-console.log('\n字符串堆结构:\n' + heap3.debugString());
