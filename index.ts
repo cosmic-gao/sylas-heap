@@ -65,9 +65,8 @@ export class PairingHeap<T> {
   #meld(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
     if (this.#comparator(a.value, b.value) <= 0) {
       b.next_sibling = a.first_child;
-      if (a.first_child) {
+      if (a.first_child)
         a.first_child.prev_link = b;
-      }
 
       b.prev_link = a;
       a.first_child = b;
