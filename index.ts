@@ -8,6 +8,8 @@ export class PairingNode<T> {
 
   public prev_link: PairingNode<T> | null = null;
 
+  public rank: number = 0;
+
   public constructor(value: T) {
     this.value = value;
   }
@@ -32,6 +34,7 @@ export class PairingHeap<T> {
     const first_child = this.#root.first_child;
 
     this.#root.first_child = null;
+    this.#root.rank = 0;
     if (first_child) first_child.prev_link = null;
 
     this.#root = this.#merge_pairs(first_child);
@@ -92,34 +95,35 @@ export class PairingHeap<T> {
 
   #merge_pairs(head: PairingNode<T> | null): PairingNode<T> | null {
     if (head === null) return null;
-    if (head.next_sibling === null) return head;
 
-    const merged_pairs: PairingNode<T>[] = [];
+    let list: PairingNode<T>[] = [];
     let current: PairingNode<T> | null = head;
 
     while (current) {
       let next: PairingNode<T> | null = current.next_sibling;
       current.prev_link = current.next_sibling = null;
+      list.push(current);
+      current = next;
+    }
 
-      if (next === null) {
-        merged_pairs.push(current);
-        current = null;
+    if (list.length <= 1) return list[0] || null;
+
+    let i = list.length - 1;
+    while (i > 0) {
+      let j = i - 1;
+
+      if (list[i].rank === list[j].rank) {
+        list[j] = this.#link(list[i], list[j]);
+        list.pop();
+        i -= 2;
       } else {
-        const next_pair_start: PairingNode<T> | null = next.next_sibling;
-        next.prev_link = next.next_sibling = null;
-
-        const merged = this.#meld(current, next);
-        merged_pairs.push(merged);
-
-        current = next_pair_start
+        i--;
       }
     }
 
-    if (merged_pairs.length === 0) return null;
-
-    let result_root = merged_pairs.pop()!;
-    while (merged_pairs.length > 0) {
-      result_root = this.#meld(result_root, merged_pairs.pop()!);
+    let result_root = list.pop()!;
+    while (list.length > 0) {
+      result_root = this.#meld(result_root, list.pop()!);
     }
 
     return result_root;
@@ -140,5 +144,20 @@ export class PairingHeap<T> {
 
     node.prev_link = null;
     node.next_sibling = null;
+    node.rank = 0;
+  }
+
+  #link(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
+    const min_node = this.#comparator(a.value, b.value) <= 0 ? a : b;
+    const max_node = min_node === a ? b : a;
+
+    max_node.next_sibling = min_node.first_child;
+    if (min_node.first_child) min_node.first_child.prev_link = max_node;
+
+    max_node.prev_link = min_node;
+    min_node.first_child = max_node;
+
+    min_node.rank++;
+    return min_node;
   }
 }
