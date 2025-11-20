@@ -1,30 +1,11 @@
-/**
- * 类型安全的比较器接口。
- * comparator(a, b) 的返回值应遵循：
- * - 负数: a 的优先级高于 b (a 应该在堆中更靠近顶部)
- * - 零: a 和 b 优先级相同
- * - 正数: b 的优先级高于 a (b 应该在堆中更靠近顶部)
- * * 对于 Min-Heap (最小堆)，可以实现 (a, b) => a - b。
- * 对于 Max-Heap (最大堆)，可以实现 (a, b) => b - a。
- */
 export type Comparator<K> = (a: K, b: K) => number;
 
-/**
- * 配对堆节点结构
- * PairingNode<T> 内部包含实际存储的数据 T。
- * 配对堆的节点是一个多叉树结构。
- */
 export class PairingNode<T> {
   public value: T;
 
   public first_child: PairingNode<T> | null = null;
   public next_sibling: PairingNode<T> | null = null;
 
-  /**
-   * 【前驱连接】实现 O(1) 剪切的核心指针。
-   * - 如果是第一个孩子，指向父节点 (Parent)。
-   * - 否则，指向上一个兄弟节点 (Previous Sibling)。
-   */
   public prev_link: PairingNode<T> | null = null;
 
   public constructor(value: T) {
@@ -44,29 +25,56 @@ export class PairingHeap<T> {
     return this.#root?.value;
   }
 
-  public insert(value: T): PairingNode<T> {
-    const node = new PairingNode(value);
-    this.#root = this.#root === null
-      ? node
-      : this.#meld(this.#root, node);
-    return node;
-  }
-
-  public poll() {
+  public poll(): T | null {
     if (!this.#root) return null;
 
     const value = this.#root.value
-    if (!this.#root.first_child) {
-      this.#root = null;
-      return value;
+    const first_child = this.#root.first_child;
+
+    this.#root.first_child = null;
+    if (first_child) first_child.prev_link = null;
+
+    this.#root = this.#merge_pairs(first_child);
+    return value;
+  }
+
+  public insert(value: T): PairingNode<T> {
+    const node = new PairingNode(value);
+    this.#root = this.#root ? this.#meld(this.#root, node) : node;
+    return node;
+  }
+
+  public decrease(node: PairingNode<T>, value: T) {
+    if (this.#comparator(value, node.value) > 0)
+      throw new Error("New value does not represent a higher priority (lower key).");
+
+    node.value = value;
+
+    if (node === this.#root) return
+
+    const prev_link = node.prev_link;
+    if (prev_link) {
+      if (prev_link?.first_child === node) {
+        prev_link.first_child = node.next_sibling;
+      } else {
+        prev_link.next_sibling = node.next_sibling;
+      }
     }
+
+    if (node.next_sibling) {
+      node.next_sibling.prev_link = prev_link;
+    }
+
+    node.prev_link = null;
+    node.next_sibling = null;
+
+    this.#root = this.#meld(this.#root!, node);
   }
 
   #meld(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
     if (this.#comparator(a.value, b.value) <= 0) {
       b.next_sibling = a.first_child;
-      if (a.first_child)
-        a.first_child.prev_link = b;
+      if (a.first_child) a.first_child.prev_link = b;
 
       b.prev_link = a;
       a.first_child = b;
@@ -74,9 +82,7 @@ export class PairingHeap<T> {
     }
 
     a.next_sibling = b.first_child;
-    if (b.first_child) {
-      b.first_child.prev_link = a;
-    }
+    if (b.first_child) b.first_child.prev_link = a;
 
     a.prev_link = b;
     b.first_child = a;
@@ -84,43 +90,77 @@ export class PairingHeap<T> {
   }
 
   #merge_pairs(head: PairingNode<T> | null): PairingNode<T> | null {
-    if (head === null || head.next_sibling === null) {
-      return head;
-    }
+    if (head === null) return null;
+    if (head.next_sibling === null) return head;
 
-    let current: PairingNode<T> = head;
-    let next: PairingNode<T> | null;
+    const merged_pairs: PairingNode<T>[] = [];
+    let current: PairingNode<T> | null = head;
 
-    const merged_list: PairingNode<T>[] = [];
-
-    while (current !== null) {
-      next = current.next_sibling;
-
+    while (current) {
+      let next: PairingNode<T> | null = current.next_sibling;
       current.prev_link = current.next_sibling = null;
 
       if (next === null) {
-        merged_list.push(current);
-        break;
+        merged_pairs.push(current);
+        current = null;
+      } else {
+        const next_pair_start: PairingNode<T> | null = next.next_sibling;
+        next.prev_link = next.next_sibling = null;
+
+        const merged = this.#meld(current, next);
+        merged_pairs.push(merged);
+
+        current = next_pair_start
       }
-
-      next.prev_link = next.next_sibling = null;
-
-      current = this.#meld(current, next);
-      merged_list.push(current);
-
-      current = next.next_sibling!;
     }
 
-    if (merged_list.length === 0) {
-      return null;
-    }
+    if (merged_pairs.length === 0)  return null;
 
-    let result_root = merged_list[merged_list.length - 1];
-
-    for (let i = merged_list.length - 2; i >= 0; i--) {
-      result_root = this.#meld(result_root, merged_list[i]);
+    let result_root = merged_pairs.pop()!;
+    while (merged_pairs.length > 0) {
+      result_root = this.#meld(result_root, merged_pairs.pop()!);
     }
 
     return result_root;
   }
 }
+
+
+// 1. 定义一个最小堆比较器
+const minComparator: Comparator<number> = (a, b) => a - b;
+
+// 2. 堆初始化和插入
+const heap = new PairingHeap<number>(minComparator);
+
+console.log("--- Initial Inserts ---");
+
+// 插入操作返回一个节点引用
+const node5 = heap.insert(5);
+heap.insert(10);
+const node3 = heap.insert(3);
+heap.insert(7);
+const node1 = heap.insert(1); 
+const node8 = heap.insert(8);
+
+console.log(`Peek (after initial inserts): ${heap.peek()}`); // 预期: 1
+
+// 3. 查看和删除最小元素
+console.log("\n--- Polling (Extracting minimum) ---");
+console.log(`Polled: ${heap.poll()}`); // 预期: 1
+console.log(`Polled: ${heap.poll()}`); // 预期: 3
+console.log(`Polled: ${heap.poll()}`); // 预期: 5
+console.log(`Peek (remaining min): ${heap.peek()}`); // 预期: 7
+
+// 4. 减小键值 (Decrease Key)
+console.log("\n--- Decrease Key Operation ---");
+
+// 将 node8 的值从 8 减小到 2
+// 由于 2 小于当前的根 7，它将被提升为新的根
+heap.decrease(node8, 2); 
+
+console.log(`After decrease, new root (peek): ${heap.peek()}`); // 预期: 2
+
+// 再次调用 poll
+console.log(`Polled: ${heap.poll()}`); // 预期: 2 (原本的 8)
+
+console.log(`Final Peek (remaining min): ${heap.peek()}`); // 预期: 7
