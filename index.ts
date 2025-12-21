@@ -18,6 +18,7 @@ export class PairingNode<T> {
 export class PairingHeap<T> {
   readonly #comparator: Comparator<T>;
   #root: PairingNode<T> | null = null;
+  #size: number = 0;
 
   public constructor(comparator: Comparator<T>) {
     this.#comparator = comparator;
@@ -25,6 +26,19 @@ export class PairingHeap<T> {
 
   public peek(): T | undefined {
     return this.#root?.value;
+  }
+
+  public size(): number {
+    return this.#size;
+  }
+
+  public isEmpty(): boolean {
+    return this.#size === 0;
+  }
+
+  public clear(): void {
+    this.#root = null;
+    this.#size = 0;
   }
 
   public poll(): T | null {
@@ -38,13 +52,23 @@ export class PairingHeap<T> {
     if (first_child) first_child.prev_link = null;
 
     this.#root = this.#merge_pairs(first_child);
+    this.#size--;
     return value;
   }
 
   public insert(value: T): PairingNode<T> {
     const node = new PairingNode(value);
     this.#root = this.#root ? this.#meld(this.#root, node) : node;
+    this.#size++;
     return node;
+  }
+
+  public insertBatch(values: T[]): PairingNode<T>[] {
+    const nodes: PairingNode<T>[] = [];
+    for (const value of values) {
+      nodes.push(this.insert(value));
+    }
+    return nodes;
   }
 
   public decrease(node: PairingNode<T>, value: T) {
@@ -57,6 +81,12 @@ export class PairingHeap<T> {
     this.#cut_node(node);
 
     this.#root = this.#meld(this.#root!, node);
+  }
+
+  public decreaseBatch(updates: Array<{ node: PairingNode<T>, value: T }>): void {
+    for (const { node, value } of updates) {
+      this.decrease(node, value);
+    }
   }
 
   public delete(node: PairingNode<T>): void {
@@ -73,6 +103,7 @@ export class PairingHeap<T> {
     node.first_child = null;
 
     if (children_root) this.#root = this.#meld(this.#root!, children_root);
+    this.#size--;
   }
 
   #meld(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
@@ -95,38 +126,42 @@ export class PairingHeap<T> {
 
   #merge_pairs(head: PairingNode<T> | null): PairingNode<T> | null {
     if (head === null) return null;
+    if (head.next_sibling === null) return head;
 
-    let list: PairingNode<T>[] = [];
+    // First pass: pair up adjacent siblings and merge them from left to right
+    let pairs: PairingNode<T>[] = [];
     let current: PairingNode<T> | null = head;
 
-    while (current) {
-      let next: PairingNode<T> | null = current.next_sibling;
-      current.prev_link = current.next_sibling = null;
-      list.push(current);
-      current = next;
-    }
+    while (current !== null) {
+      const first = current;
+      const second: PairingNode<T> | null = current.next_sibling;
 
-    if (list.length <= 1) return list[0] || null;
+      // Clear links
+      first.prev_link = null;
+      first.next_sibling = null;
 
-    let i = list.length - 1;
-    while (i > 0) {
-      let j = i - 1;
+      if (second !== null) {
+        const next = second.next_sibling;
+        second.prev_link = null;
+        second.next_sibling = null;
 
-      if (list[i].rank === list[j].rank) {
-        list[j] = this.#link(list[i], list[j]);
-        list.pop();
-        i -= 2;
+        // Merge the pair
+        pairs.push(this.#meld(first, second));
+        current = next;
       } else {
-        i--;
+        // Odd number of nodes, last one stands alone
+        pairs.push(first);
+        current = null;
       }
     }
 
-    let result_root = list.pop()!;
-    while (list.length > 0) {
-      result_root = this.#meld(result_root, list.pop()!);
+    // Second pass: merge all pairs from right to left
+    let result = pairs[pairs.length - 1];
+    for (let i = pairs.length - 2; i >= 0; i--) {
+      result = this.#meld(pairs[i], result);
     }
 
-    return result_root;
+    return result;
   }
 
   #cut_node(node: PairingNode<T>): void {
@@ -147,17 +182,54 @@ export class PairingHeap<T> {
     node.rank = 0;
   }
 
-  #link(a: PairingNode<T>, b: PairingNode<T>): PairingNode<T> {
-    const min_node = this.#comparator(a.value, b.value) <= 0 ? a : b;
-    const max_node = min_node === a ? b : a;
+  public *[Symbol.iterator](): IterableIterator<T> {
+    if (!this.#root) return;
 
-    max_node.next_sibling = min_node.first_child;
-    if (min_node.first_child) min_node.first_child.prev_link = max_node;
+    // Perform a level-order traversal without modifying the heap
+    const queue: PairingNode<T>[] = [this.#root];
 
-    max_node.prev_link = min_node;
-    min_node.first_child = max_node;
+    while (queue.length > 0) {
+      const node = queue.shift()!;
+      yield node.value;
 
-    min_node.rank++;
-    return min_node;
+      // Add children to queue
+      let child = node.first_child;
+      while (child) {
+        queue.push(child);
+        child = child.next_sibling;
+      }
+    }
+  }
+
+  public toArray(): T[] {
+    return Array.from(this);
+  }
+
+  public merge(other: PairingHeap<T>): void {
+    if (!other.#root) return;
+    
+    if (!this.#root) {
+      this.#root = other.#root;
+      this.#size = other.#size;
+    } else {
+      this.#root = this.#meld(this.#root, other.#root);
+      this.#size += other.#size;
+    }
+
+    // Clear the other heap
+    other.#root = null;
+    other.#size = 0;
+  }
+
+  public static fromDAG<T>(
+    nodes: T[],
+    getInDegree: (node: T) => number,
+    comparator?: Comparator<T>
+  ): PairingHeap<T> {
+    // Default comparator: compare by in-degree
+    const comp = comparator || ((a: T, b: T) => getInDegree(a) - getInDegree(b));
+    const heap = new PairingHeap<T>(comp);
+    heap.insertBatch(nodes);
+    return heap;
   }
 }

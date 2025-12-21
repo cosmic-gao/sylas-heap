@@ -1,14 +1,511 @@
 <!DOCTYPE html>
-<html lang="en">
-
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>图调度系统 - 示例演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 1.1em;
+        }
+
+        .tabs {
+            display: flex;
+            background: #f5f5f5;
+            border-bottom: 2px solid #e0e0e0;
+            overflow-x: auto;
+        }
+
+        .tab {
+            padding: 15px 30px;
+            cursor: pointer;
+            border: none;
+            background: transparent;
+            font-size: 1em;
+            font-weight: 500;
+            color: #666;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+
+        .tab:hover {
+            background: #e8e8e8;
+        }
+
+        .tab.active {
+            background: white;
+            color: #667eea;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .example-panel {
+            display: none;
+        }
+
+        .example-panel.active {
+            display: block;
+        }
+
+        .code-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+
+        .code-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 500;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+
+        .output-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 200px;
+            border-left: 4px solid #28a745;
+        }
+
+        .output-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .output {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .output.empty {
+            color: #999;
+            font-style: italic;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .description {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+
+        .description p {
+            margin: 5px 0;
+            color: #1976D2;
+        }
+
+        .visualization-section {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 4px solid #28a745;
+        }
+
+        .visualization-section h3 {
+            margin-bottom: 15px;
+            color: #333;
+        }
+
+        .visualization-container {
+            width: 100%;
+            min-height: 400px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #fafafa;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .layout-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .animated-edge {
+            animation: flow 1s linear infinite;
+        }
+
+        @keyframes flow {
+            0% {
+                stroke-dashoffset: 100;
+            }
+            100% {
+                stroke-dashoffset: 0;
+            }
+        }
+    </style>
 </head>
-
 <body>
-    <script type="module" src="index.ts"></script>
-</body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 图调度系统</h1>
+            <p>基于图的任务调度系统演示</p>
+        </div>
 
+        <div class="tabs">
+            <button class="tab active" onclick="showExample(0)">简单管道</button>
+            <button class="tab" onclick="showExample(1)">并行处理</button>
+            <button class="tab" onclick="showExample(2)">复杂DAG</button>
+            <button class="tab" onclick="showExample(3)">优先级调度</button>
+        </div>
+
+        <div class="content">
+            <!-- 示例 1: 简单管道 -->
+            <div class="example-panel active" id="example-0">
+                <div class="description">
+                    <p><strong>示例说明：</strong>展示一个简单的线性数据处理管道，数据从源节点经过转换节点到达接收节点。</p>
+                </div>
+                <div class="code-section">
+                    <h3>代码预览</h3>
+                    <div class="code-block">// 创建图
+const graph = new Graph({ maxConcurrency: 1 });
+
+// 数据源节点
+const source = new SourceNode({ id: 'source', priority: 0 }, { value: 10 });
+source.addOutputEndpoint('out');
+
+// 转换节点
+const transform = new ComputeNode(
+  { id: 'transform', priority: 1 },
+  async (inputs) => inputs.in.value * 2
+);
+transform.addInputEndpoint('in');
+transform.addOutputEndpoint('out');
+
+// 接收节点
+const sink = new SinkNode({ id: 'sink', priority: 2 });
+sink.addInputEndpoint('in');
+
+// 构建图
+graph.addNode(source);
+graph.addNode(transform);
+graph.addNode(sink);
+
+graph.connect('source', 'out', 'transform', 'in');
+graph.connect('transform', 'out', 'sink', 'in');
+
+// 执行
+await graph.execute();</div>
+                </div>
+                <div class="visualization-section">
+                    <h3>节点图可视化</h3>
+                    <div class="visualization-container" id="visual-0"></div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="runExample(0)">▶ 运行示例</button>
+                    <button class="btn btn-secondary" onclick="clearOutput(0)">清除输出</button>
+                </div>
+                <div class="output-section">
+                    <h3>执行结果</h3>
+                    <div class="output empty" id="output-0">点击"运行示例"按钮查看结果...</div>
+                </div>
+            </div>
+
+            <!-- 示例 2: 并行处理 -->
+            <div class="example-panel" id="example-1">
+                <div class="description">
+                    <p><strong>示例说明：</strong>展示并行处理多个任务，一个源节点连接到多个工作节点，然后汇总结果。</p>
+                </div>
+                <div class="code-section">
+                    <h3>代码预览</h3>
+                    <div class="code-block">// 创建图（并发数为3）
+const graph = new Graph({ maxConcurrency: 3 });
+
+// 数据源
+const source = new SourceNode({ id: 'source' }, [1, 2, 3, 4, 5]);
+source.addOutputEndpoint('out');
+
+// 创建3个并行工作节点
+const workers = [];
+for (let i = 0; i < 3; i++) {
+  const worker = new ComputeNode(
+    { id: `worker${i}`, priority: 1 },
+    async (inputs) => {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      return inputs.in.map(x => x * (i + 1));
+    }
+  );
+  worker.addInputEndpoint('in');
+  worker.addOutputEndpoint('out');
+  workers.push(worker);
+}
+
+// 汇总节点
+const sink = new SinkNode({ id: 'sink' });
+sink.addInputEndpoint('in');
+
+// 连接
+graph.addNode(source);
+workers.forEach(w => {
+  graph.addNode(w);
+  graph.connect('source', 'out', w.id, 'in');
+  graph.connect(w.id, 'out', 'sink', 'in');
+});
+graph.addNode(sink);
+
+await graph.execute();</div>
+                </div>
+                <div class="visualization-section">
+                    <h3>节点图可视化</h3>
+                    <div class="visualization-container" id="visual-1"></div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="runExample(1)">▶ 运行示例</button>
+                    <button class="btn btn-secondary" onclick="clearOutput(1)">清除输出</button>
+                </div>
+                <div class="output-section">
+                    <h3>执行结果</h3>
+                    <div class="output empty" id="output-1">点击"运行示例"按钮查看结果...</div>
+                </div>
+            </div>
+
+            <!-- 示例 3: 复杂DAG -->
+            <div class="example-panel" id="example-2">
+                <div class="description">
+                    <p><strong>示例说明：</strong>展示一个复杂的依赖图，包含分支和合并，演示依赖关系的自动解析。</p>
+                </div>
+                <div class="code-section">
+                    <h3>代码预览</h3>
+                    <div class="code-block">// 复杂DAG结构:
+//     A
+//    / \
+//   B   C
+//    \ / \
+//     D   E
+//      \ /
+//       F
+
+const graph = new Graph({ maxConcurrency: 2 });
+
+// 创建节点...
+const nodeA = new SourceNode({ id: 'A' }, 'data-A');
+nodeA.addOutputEndpoint('out');
+
+const nodeB = new ComputeNode({ id: 'B' }, async (inputs) => inputs.in + '-B');
+nodeB.addInputEndpoint('in');
+nodeB.addOutputEndpoint('out');
+
+const nodeC = new ComputeNode({ id: 'C' }, async (inputs) => inputs.in + '-C');
+nodeC.addInputEndpoint('in');
+nodeC.addOutputEndpoint('out1');
+nodeC.addOutputEndpoint('out2');
+
+const nodeD = new ComputeNode({ id: 'D' }, async (inputs) => inputs.in1 + inputs.in2 + '-D');
+nodeD.addInputEndpoint('in1');
+nodeD.addInputEndpoint('in2');
+nodeD.addOutputEndpoint('out');
+
+const nodeE = new ComputeNode({ id: 'E' }, async (inputs) => inputs.in + '-E');
+nodeE.addInputEndpoint('in');
+nodeE.addOutputEndpoint('out');
+
+const nodeF = new SinkNode({ id: 'F' });
+nodeF.addInputEndpoint('in1');
+nodeF.addInputEndpoint('in2');
+
+// 连接
+graph.addNode(nodeA);
+graph.addNode(nodeB);
+graph.addNode(nodeC);
+graph.addNode(nodeD);
+graph.addNode(nodeE);
+graph.addNode(nodeF);
+
+graph.connect('A', 'out', 'B', 'in');
+graph.connect('A', 'out', 'C', 'in');
+graph.connect('B', 'out', 'D', 'in1');
+graph.connect('C', 'out1', 'D', 'in2');
+graph.connect('C', 'out2', 'E', 'in');
+graph.connect('D', 'out', 'F', 'in1');
+graph.connect('E', 'out', 'F', 'in2');
+
+await graph.execute();</div>
+                </div>
+                <div class="visualization-section">
+                    <h3>节点图可视化</h3>
+                    <div class="visualization-container" id="visual-2"></div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="runExample(2)">▶ 运行示例</button>
+                    <button class="btn btn-secondary" onclick="clearOutput(2)">清除输出</button>
+                </div>
+                <div class="output-section">
+                    <h3>执行结果</h3>
+                    <div class="output empty" id="output-2">点击"运行示例"按钮查看结果...</div>
+                </div>
+            </div>
+
+            <!-- 示例 4: 优先级调度 -->
+            <div class="example-panel" id="example-3">
+                <div class="description">
+                    <p><strong>示例说明：</strong>展示优先级调度，不同优先级的任务会按照优先级顺序执行。</p>
+                </div>
+                <div class="code-section">
+                    <h3>代码预览</h3>
+                    <div class="code-block">// 创建图（串行执行以观察优先级）
+const graph = new Graph({ 
+  maxConcurrency: 1,
+  schedulingStrategy: new DefaultSchedulingStrategy()
+});
+
+// 创建不同优先级的任务
+const tasks = [
+  { id: 'Low', priority: 10, data: 'low-priority' },
+  { id: 'High', priority: 1, data: 'high-priority' },
+  { id: 'Medium', priority: 5, data: 'medium-priority' },
+  { id: 'Urgent', priority: 0, data: 'urgent-priority' },
+];
+
+const sink = new SinkNode({ id: 'Sink' });
+sink.addInputEndpoint('in');
+graph.addNode(sink);
+
+for (const task of tasks) {
+  const node = new SourceNode({ id: task.id, priority: task.priority }, task.data);
+  node.addOutputEndpoint('out');
+  graph.addNode(node);
+  graph.connect(task.id, 'out', 'Sink', 'in');
+}
+
+await graph.execute();</div>
+                </div>
+                <div class="visualization-section">
+                    <h3>节点图可视化</h3>
+                    <div class="visualization-container" id="visual-3"></div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-primary" onclick="runExample(3)">▶ 运行示例</button>
+                    <button class="btn btn-secondary" onclick="clearOutput(3)">清除输出</button>
+                </div>
+                <div class="output-section">
+                    <h3>执行结果</h3>
+                    <div class="output empty" id="output-3">点击"运行示例"按钮查看结果...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./app.ts"></script>
+</body>
 </html>

@@ -1,14 +1,33 @@
 {
-  "name": "sylas-heap",
+  "name": "graph-scheduling-system",
   "version": "1.0.0",
-  "type": "module",
-  "private": true,
+  "description": "一个强大的基于图的任务调度系统,支持复杂的依赖管理、多种调度策略和并发执行",
+  "source": "index.html",
   "scripts": {
-    "dev": "parcel index.html"
+    "dev": "parcel index.html",
+    "build": "parcel build index.html",
+    "serve": "parcel serve dist/index.html",
+    "demo": "ts-node demo.ts",
+    "examples": "ts-node examples.ts",
+    "advanced": "ts-node advanced-examples.ts",
+    "visualize": "ts-node visualizer.ts",
+    "test": "ts-node test.ts"
   },
+  "keywords": [
+    "graph",
+    "scheduling",
+    "task",
+    "workflow",
+    "dag",
+    "pipeline",
+    "concurrent"
+  ],
+  "author": "",
+  "license": "MIT",
   "devDependencies": {
-    "@types/node": "^24.7.2",
-    "parcel": "^2.16.1",
-    "typescript": "^5.9.3"
+    "@types/node": "^20.0.0",
+    "parcel": "^2.16.3",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.0.0"
   }
 }
